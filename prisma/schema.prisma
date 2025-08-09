@@ -6,7 +6,7 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../lib/generated/prisma"
+
 }
 
 datasource db {
@@ -14,6 +14,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
 
 model User {
   id            String    @id @default(cuid())
@@ -23,7 +50,6 @@ model User {
   image         String?
   password      String?   // For credentials login
   role          Role      @default(USER)
-  bio           String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -33,7 +59,6 @@ model User {
   comments Comment[]
 }
 
-
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -42,25 +67,23 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// Blog models
 model Post {
-  id          String      @id @default(cuid())
+  id          String    @id @default(cuid())
   title       String
-  slug        String      @unique
-  content     String      // Rich text content
-  excerpt     String?     // Short description
-  published   Boolean     @default(false)
-  featured    Boolean     @default(false)
-  views       Int         @default(0)
-  readingTime Int?        // Estimated minutes
-  coverImage  String?     // Featured image
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  slug        String    @unique
+  content     String
+  excerpt     String?
+  published   Boolean   @default(false)
+  coverImage  String?
+  views       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   authorId   String
-  author     User        @relation(fields: [authorId], references: [id])
+  author     User       @relation(fields: [authorId], references: [id])
   categoryId String?
-  category   Category?   @relation(fields: [categoryId], references: [id])
-  tags       Tag[]
+  category   Category?  @relation(fields: [categoryId], references: [id])
   comments   Comment[]
 }
 
@@ -69,15 +92,7 @@ model Category {
   name        String @unique
   slug        String @unique
   description String?
-  color       String? // For UI theming
-  
-  posts Post[]
-}
-
-model Tag {
-  id    String @id @default(cuid())
-  name  String @unique
-  slug  String @unique
+  color       String?
   
   posts Post[]
 }
@@ -93,55 +108,11 @@ model Comment {
   userId String?
   user   User?  @relation(fields: [userId], references: [id])
   
-  // For guest comments
   guestName  String?
   guestEmail String?
 }
-
-model Newsletter {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  subscribed  Boolean  @default(true)
-  subscribedAt DateTime @default(now())
-}
-
-
-
-// Added missing Account model
-model Account {
-  id                 String   @id @default(cuid())
-  userId             String
-  type               String
-  provider           String
-  providerAccountId  String
-  refresh_token      String?
-  access_token       String?
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String?
-  session_state      String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-
-// Added missing Session model
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
- user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
 
 enum Role {
   USER
   ADMIN
 }
-
-
