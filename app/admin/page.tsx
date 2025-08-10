@@ -1,8 +1,9 @@
 // src/app/admin/page.tsx
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,51 +14,136 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Eye, Calendar, User } from "lucide-react";
+import { DeletePostModal } from "@/components/DeletePostModal";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Eye,
+  Calendar,
+  User,
+  RefreshCw,
+} from "lucide-react";
+import { toast } from "react-hot-toast";
 
-async function getPosts() {
-  return await db.post.findMany({
-    include: {
-      author: {
-        select: { id: true, name: true, email: true },
-      },
-      category: true,
-      _count: {
-        select: { comments: true },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 20,
-  });
-}
-
-async function getStats() {
-  const [totalPosts, publishedPosts, draftPosts, totalComments] =
-    await Promise.all([
-      db.post.count(),
-      db.post.count({ where: { published: true } }),
-      db.post.count({ where: { published: false } }),
-      db.comment.count(),
-    ]);
-
-  return {
-    totalPosts,
-    publishedPosts,
-    draftPosts,
-    totalComments,
+interface Post {
+  id: string;
+  title: string;
+  slug: string;
+  published: boolean;
+  views: number;
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name: string | null;
+    email: string;
+  };
+  category: {
+    id: string;
+    name: string;
+  } | null;
+  _count: {
+    comments: number;
   };
 }
 
-export default async function AdminDashboard() {
-  const session = await getServerSession(authOptions);
+interface Stats {
+  totalPosts: number;
+  publishedPosts: number;
+  draftPosts: number;
+  totalComments: number;
+}
 
-  if (!session?.user?.id) {
+export default function AdminDashboard() {
+  const { data: session, status } = useSession();
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [stats, setStats] = useState<Stats>({
+    totalPosts: 0,
+    publishedPosts: 0,
+    draftPosts: 0,
+    totalComments: 0,
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    postId: string;
+    postTitle: string;
+  }>({
+    isOpen: false,
+    postId: "",
+    postTitle: "",
+  });
+
+  // Redirect if not authenticated
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (status === "unauthenticated") {
     redirect("/auth/signin");
   }
 
-  const [posts, stats] = await Promise.all([getPosts(), getStats()]);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-  const formatDate = (date: Date) => {
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch posts
+      const postsResponse = await fetch("/api/post?limit=20");
+      const postsData = await postsResponse.json();
+
+      if (postsResponse.ok) {
+        setPosts(postsData.posts || []);
+
+        // Calculate stats from fetched posts
+        const posts = postsData.posts || [];
+        const publishedCount = posts.filter((p: Post) => p.published).length;
+        const draftCount = posts.filter((p: Post) => !p.published).length;
+        const totalComments = posts.reduce(
+          (sum: number, p: Post) => sum + (p._count?.comments || 0),
+          0
+        );
+
+        setStats({
+          totalPosts: posts.length,
+          publishedPosts: publishedCount,
+          draftPosts: draftCount,
+          totalComments,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load dashboard data");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (postId: string, postTitle: string) => {
+    setDeleteModal({
+      isOpen: true,
+      postId,
+      postTitle,
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    // Refresh the data after successful deletion
+    fetchData();
+  };
+
+  const handleDeleteClose = () => {
+    setDeleteModal({
+      isOpen: false,
+      postId: "",
+      postTitle: "",
+    });
+  };
+
+  const formatDate = (date: string) => {
     return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "short",
@@ -65,8 +151,19 @@ export default async function AdminDashboard() {
     }).format(new Date(date));
   };
 
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="w-6 h-6 animate-spin" />
+          <span className="ml-2">Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto p-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -74,12 +171,25 @@ export default async function AdminDashboard() {
             Manage your blog posts and content
           </p>
         </div>
-        <Link href="/admin/post/new">
-          <Button className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            New Post
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchData()}
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+            />
+            Refresh
           </Button>
-        </Link>
+          <Link href="/admin/post/new">
+            <Button className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              New Post
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -154,7 +264,7 @@ export default async function AdminDashboard() {
                 <p className="text-gray-500 mb-4">
                   Get started by creating your first blog post.
                 </p>
-                <Link href="/admin/posts/new">
+                <Link href="/admin/post/new">
                   <Button>Create Your First Post</Button>
                 </Link>
               </div>
@@ -203,20 +313,26 @@ export default async function AdminDashboard() {
                   <div className="flex items-center gap-2 ml-4">
                     {post.published && (
                       <Link href={`/post/${post.slug}`} target="_blank">
-                        <Button variant="outline" size="sm">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          title="View live post"
+                        >
                           <Eye className="w-3 h-3" />
                         </Button>
                       </Link>
                     )}
-                    <Link href={`/admin/posts/${post.id}/edit`}>
-                      <Button variant="outline" size="sm">
+                    <Link href={`/admin/post/${post.id}/edit`}>
+                      <Button variant="outline" size="sm" title="Edit post">
                         <Edit className="w-3 h-3" />
                       </Button>
                     </Link>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => handleDeleteClick(post.id, post.title)}
+                      title="Delete post"
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
@@ -228,13 +344,22 @@ export default async function AdminDashboard() {
 
           {posts.length > 0 && (
             <div className="mt-6 text-center">
-              <Link href="/admin/posts">
-                <Button variant="outline">View All Posts</Button>
-              </Link>
+              <p className="text-sm text-gray-500">
+                Showing {posts.length} most recent posts
+              </p>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Modal */}
+      <DeletePostModal
+        isOpen={deleteModal.isOpen}
+        onClose={handleDeleteClose}
+        onDelete={handleDeleteConfirm}
+        postTitle={deleteModal.postTitle}
+        postId={deleteModal.postId}
+      />
     </div>
   );
 }

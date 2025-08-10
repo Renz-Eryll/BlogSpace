@@ -1,9 +1,19 @@
+// src/app/api/posts/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { z } from "zod";
-import { db } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
-import { postSchema } from "@/lib/validations";
+import { db } from "@/lib/db";
+import { z } from "zod";
+
+// Post creation schema
+const createPostSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200, "Title too long"),
+  content: z.string().min(1, "Content is required"),
+  excerpt: z.string().optional(),
+  published: z.boolean().default(false),
+  coverImage: z.string().optional(),
+  categoryId: z.string().optional(),
+});
 
 // Helper function to generate slug from title
 function generateSlug(title: string): string {
@@ -71,6 +81,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// POST - Create new post
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -80,8 +91,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validatedData = postSchema.parse(body);
+    const validatedData = createPostSchema.parse(body);
 
+    // Generate unique slug
     let slug = generateSlug(validatedData.title);
     let slugCounter = 1;
 
@@ -93,6 +105,7 @@ export async function POST(request: NextRequest) {
     // Generate excerpt if not provided
     let excerpt = validatedData.excerpt;
     if (!excerpt && validatedData.content) {
+      // Remove HTML tags and get first 160 characters
       excerpt =
         validatedData.content
           .replace(/<[^>]*>/g, "")

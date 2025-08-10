@@ -7,7 +7,7 @@ import Link from "next/link";
 export function AdminNav() {
   return (
     <nav className="bg-white shadow-sm border-b">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
             <Link href="/admin" className="text-xl font-bold">

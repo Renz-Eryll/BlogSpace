@@ -4,7 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
-import { categorySchema } from "@/lib/validations";
+
+const createCategorySchema = z.object({
+  name: z.string().min(1, "Category name is required").max(50, "Name too long"),
+  description: z.string().optional(),
+  color: z.string().optional(),
+});
 
 // Helper function to generate slug from name
 function generateSlug(name: string): string {
@@ -48,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validatedData = categorySchema.parse(body);
+    const validatedData = createCategorySchema.parse(body);
 
     // Generate unique slug
     let slug = generateSlug(validatedData.name);
