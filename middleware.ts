@@ -1,38 +1,25 @@
-import { withAuth } from "next-auth/middleware";
+// middleware.ts
+import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 
-export default withAuth(
-  function middleware(req) {
-    console.log("🔍 Middleware - Path:", req.nextUrl.pathname);
-    console.log("🔍 Middleware - Token exists:", !!req.nextauth.token);
-    console.log("🔍 Middleware - User role:", req.nextauth.token?.role);
+export async function middleware(req: import("next/server").NextRequest) {
+  const token = await getToken({ req });
+  const { pathname } = req.nextUrl;
 
-    return NextResponse.next();
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        console.log("🔐 Authorized callback");
-        console.log("🔐 Path:", req.nextUrl.pathname);
-        console.log("🔐 Token exists:", !!token);
-
-        // For admin routes, require authentication
-        if (req.nextUrl.pathname.startsWith("/admin")) {
-          const hasToken = !!token;
-          console.log(
-            "🔐 Admin route access:",
-            hasToken ? "GRANTED" : "DENIED"
-          );
-          return hasToken;
-        }
-
-        // All other routes are public
-        return true;
-      },
-    },
+  // 🔹 If logged in and tries to access signin/signup, redirect to dashboard
+  if (token && (pathname === "/auth/signin" || pathname === "/auth/signup")) {
+    return NextResponse.redirect(new URL("/admin", req.url));
   }
-);
 
+  // 🔹 Protect /admin routes from unauthenticated access
+  if (pathname.startsWith("/admin") && !token) {
+    return NextResponse.redirect(new URL("/auth/signin", req.url));
+  }
+
+  return NextResponse.next();
+}
+
+// 🔹 Apply to admin routes and auth pages
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/auth/signin", "/auth/signup"],
 };

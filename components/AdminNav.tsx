@@ -18,7 +18,7 @@ export function AdminNav() {
                 Dashboard
               </Link>
               <Link
-                href="/admin/posts"
+                href="/admin/post"
                 className="text-gray-700 hover:text-gray-900"
               >
                 Posts

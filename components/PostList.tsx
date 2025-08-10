@@ -1,7 +1,17 @@
-import React from "react";
+import PostCard from "./PostCard";
+import { db } from "@/lib/db";
 
-const PostList = () => {
-  return <div>PostList</div>;
-};
+export default async function PostList() {
+  const posts = await db.post.findMany({
+    include: { author: { select: { name: true } } },
+    orderBy: { createdAt: "desc" },
+  });
 
-export default PostList;
+  return (
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      {posts.map((post) => (
+        <PostCard key={post.id} post={post} />
+      ))}
+    </div>
+  );
+}
